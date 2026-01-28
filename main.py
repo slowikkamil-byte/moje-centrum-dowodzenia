@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Konfiguracja strony
+# 1. Konfiguracja pod telefon
 st.set_page_config(page_title="Dekarz CRM", layout="wide", page_icon="🏠")
 
-# 2. Link CSV
+# 2. Dane
 URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/export?format=csv"
 
 @st.cache_data(ttl=2)
@@ -17,85 +17,94 @@ def load_data():
 
 df = load_data()
 
-# --- STYLIZACJA CSS (Wymuszamy menu na dole i brak paska bocznego) ---
+# --- STYLIZACJA (To naprawi wygląd menu i wyszukiwarki) ---
 st.markdown("""
     <style>
-    /* Ukrycie domyślnego menu bocznego Streamlit */
-    [data-testid="stSidebar"] {display: none;}
-    [data-testid="collapsedControl"] {display: none;}
+    /* Ukrycie paska bocznego i standardowych ikon Streamlit */
+    [data-testid="stSidebar"], .stDeployButton, header {display: none !important;}
     
-    /* Odstęp na dole dla treści, żeby menu nic nie zasłaniało */
-    .main .block-container { margin-bottom: 100px; }
+    /* Główne tło i marginesy */
+    .main .block-container { padding: 10px; margin-bottom: 80px; }
 
-    /* Stylizacja paska wyszukiwania */
-    div[data-baseweb="input"] { border-radius: 15px !important; }
+    /* STYLIZACJA PASKA WYSZUKIWANIA */
+    div[data-baseweb="input"] {
+        border-radius: 15px !important;
+        background-color: #262730 !important;
+    }
 
-    /* KONTENER DOLNEGO MENU */
-    .footer {
+    /* PRZYKLEJONE MENU DOLNE (Z Twojej wizualizacji) */
+    .nav-bar {
         position: fixed;
-        left: 0;
         bottom: 0;
+        left: 0;
         width: 100%;
         background-color: #111;
-        color: white;
-        text-align: center;
-        z-index: 1000;
-        padding: 10px 0;
-        border-top: 1px solid #333;
         display: flex;
         justify-content: space-around;
+        padding: 10px 0;
+        border-top: 2px solid #ffaa00;
+        z-index: 9999;
+    }
+    .nav-item {
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        font-size: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIKA NAWIGACJI ---
-# Skoro nie działa zewnętrzna biblioteka, używamy session_state do sterowania widokiem
-if 'menu_wybor' not in st.session_state:
-    st.session_state['menu_wybor'] = "Start"
+# Inicjalizacja stanu menu
+if 'tab' not in st.session_state:
+    st.session_state.tab = "Start"
 
-# --- GLOBALNA WYSZUKIWARKA ---
-st.write("### 🏠 Dekarz CRM")
-search_query = st.text_input("🔍 Szukaj...", placeholder="Wpisz cokolwiek (np. war...)").lower()
+# --- GÓRA: WYSZUKIWARKA ---
+st.title("🏠 Dekarz CRM")
+# Dodajemy on_change dla lepszej dynamiki
+search_query = st.text_input("Szukaj...", placeholder="Wpisz miasto, nazwisko (np. war...)", label_visibility="collapsed").lower()
 
-# Wyświetlanie wyników wyszukiwania (zawsze na górze jeśli coś wpisano)
+# Logika wyszukiwania
 if search_query and not df.empty:
-    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    df_results = df[mask]
-    if not df_results.empty:
-        st.subheader(f"🔎 Wyniki ({len(df_results)})")
-        for index, row in df_results.iterrows():
-            if st.button(f"👤 {row.iloc[0]} | 📍 {row.iloc[3]}", key=f"src_{index}"):
-                st.session_state['selected_client'] = row
+    results = df[df.apply(lambda r: r.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+    if not results.empty:
+        st.subheader(f"🔎 Wyniki ({len(results)})")
+        for i, row in results.iterrows():
+            if st.button(f"👤 {row.iloc[0]} | {row.iloc[3]}", key=f"s_{i}", use_container_width=True):
+                st.session_state.selected_client = row
                 st.switch_page("pages/details.py")
     st.divider()
 
-# --- TREŚĆ ZAKŁADEK ---
-if st.session_state['menu_wybor'] == "Start":
+# --- ŚRODEK: TREŚĆ ZAKŁADEK ---
+if st.session_state.tab == "Start":
     st.header("🏗️ W realizacji")
-    # ... (tutaj Twój kod kafelków "W realizacji") ...
-    st.write("Lista Twoich aktywnych budów pojawi się tutaj.")
+    active = df[df['Status'] == "W realizacji"] if 'Status' in df.columns else pd.DataFrame()
+    if not active.empty:
+        cols = st.columns(2)
+        for i, (idx, row) in enumerate(active.iterrows()):
+            with cols[i % 2]:
+                st.info(f"**{row.iloc[0]}**\n\n📍 {row.iloc[3]}")
+                if st.button("Szczegóły", key=f"btn_{idx}", use_container_width=True):
+                    st.session_state.selected_client = row
+                    st.switch_page("pages/details.py")
+    else:
+        st.write("Brak aktywnych budów.")
 
-elif st.session_state['menu_wybor'] == "Aktualności":
-    st.header("⚡ Ostatnie rozmowy")
-    # ... kod aktualności ...
+elif st.session_state.tab == "Aktualności":
+    st.header("⚡ Aktualności")
+    st.write("Ostatnie zdarzenia z bazy...")
 
-elif st.session_state['menu_wybor'] == "Klienci":
-    st.header("👥 Baza klientów")
-    st.dataframe(df, use_container_width=True)
-
-# --- DOLNE MENU (Ręcznie robione kolumny na dole) ---
-# To zastępuje znikające menu boczne i zewnętrzne biblioteki
-st.markdown('<div class="footer">', unsafe_allow_html=True)
-c1, c2, c3, c4, c5 = st.columns(5)
-
-with c1:
-    if st.button("🏠\nStart"): st.session_state['menu_wybor'] = "Start"; st.rerun()
-with c2:
-    if st.button("⚡\nAktualki"): st.session_state['menu_wybor'] = "Aktualności"; st.rerun()
-with c3:
-    if st.button("👥\nKlienci"): st.session_state['menu_wybor'] = "Klienci"; st.rerun()
-with c4:
-    if st.button("📞\nTel"): st.session_state['menu_wybor'] = "Telefony"; st.rerun()
-with c5:
-    if st.button("✅\nZadania"): st.session_state['menu_wybor'] = "Zadania"; st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
+# --- DÓŁ: POZIOME MENU (NAPRAWA) ---
+# Używamy kolumn, aby przyciski były obok siebie na dole
+st.markdown("<br><br>", unsafe_allow_html=True) # Odstęp
+footer = st.container()
+with footer:
+    # Ten blok CSS/HTML "pływa" na dole dzięki stylowi 'position: fixed'
+    cols = st.columns(5)
+    with cols[0]:
+        if st.button("🏠\nStart"): st.session_state.tab = "Start"; st.rerun()
+    with cols[1]:
+        if st.button("⚡\nAkt"): st.session_state.tab = "Aktualności"; st.rerun()
+    with cols[2]:
+        if st.button("👥\nKli"): st.session_state.tab = "Klienci"; st.rerun()
+    with cols[3]:
+        if st.button("📞\nTel"): st.session_state
