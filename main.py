@@ -3,25 +3,31 @@ import pandas as pd
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# Konfiguracja strony
-st.set_page_config(page_title="CRM Dekarski", layout="wide", initial_sidebar_state="expanded")
+# --- 1. KONFIGURACJA ---
+st.set_page_config(page_title="CRM Dekarski", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS: Ramka 2px, Dark Mode i pełna szerokość przycisków na mobilkach
+# --- CSS (Stylizacja kart 2px i przycisków mobilnych) ---
 st.markdown("""
     <style>
+    /* Ukrycie domyślnych elementów */
+    .stDeployButton, header {display: none !important;}
+    
+    /* Karta klienta - Twoja zielona ramka 2px */
     .client-card {
         border: 2px solid #00e676;
         border-radius: 12px;
         padding: 20px;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
         background-color: #1d2129;
     }
+    
+    /* Przyciski nawigacyjne i akcji */
     .stButton button {
         background-color: transparent;
         border: 1px solid #00e676;
         color: #00e676;
         width: 100%;
-        border-radius: 8px;
+        border-radius: 10px;
         height: 3.5em;
         font-weight: bold;
     }
@@ -29,7 +35,8 @@ st.markdown("""
         background-color: #00e676;
         color: #1d2129;
     }
-    /* Równe rozłożenie i pełna szerokość w widoku mobilnym */
+
+    /* Responsywność kolumn (przyciski jeden pod drugim na telefonie) */
     [data-testid="column"] {
         width: 100% !important;
         flex: 1 1 auto !important;
@@ -45,7 +52,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Funkcja pobierania danych
+# --- 2. FUNKCJA POBIERANIA DANYCH ---
 def get_data():
     try:
         info = st.secrets["gcp_service_account"]
@@ -63,10 +70,14 @@ def get_data():
         st.error(f"Błąd połączenia: {e}")
         return pd.DataFrame()
 
-# --- NAWIGACJA (TWOJE PRZYCISKI) ---
-if 'view' not in st.session_state:
-    st.session_state.view = "Klienci"
+# --- 3. UI I NAWIGACJA ---
+st.title("🏗️ CRM Dekarski")
 
+# Inicjalizacja widoku
+if 'view' not in st.session_state:
+    st.session_state.view = "Start"
+
+# TWOJE PRZYCISKI MENU
 m1, m2, m3 = st.columns(3)
 with m1:
     if st.button("🏗️ START", use_container_width=True): 
@@ -75,51 +86,63 @@ with m2:
     if st.button("👥 KLIENCI", use_container_width=True): 
         st.session_state.view = "Klienci"
 with m3:
-    if st.button("➕ DODAJ", use_container_width=True): 
-        st.session_state.view = "Dodaj"
+    if st.button("✅ ZADANIA", use_container_width=True): 
+        st.session_state.view = "Zadania"
 
 st.divider()
 
-# --- LOGIKA WIDOKÓW ---
-if st.session_state.view == "Klienci":
-    st.title("🏗️ Lista Klientów")
-    
-    df = get_data()
-    
-    if not df.empty:
-        search = st.text_input("🔍 Szukaj...", placeholder="Nazwisko, adres...").lower()
-        
-        if search:
-            df = df[df.apply(lambda row: search in str(row.iloc[0]).lower() or search in str(row.iloc[3]).lower(), axis=1)]
+# --- 4. LOGIKA WIDOKÓW ---
+df = get_data()
 
-        for index, row in df.iterrows():
-            nazwisko = row.iloc[0]
-            data_k = row.iloc[1] if len(row) > 1 else "---"
-            esencja = str(row.iloc[3]) if len(row) > 3 else "Brak opisu"
-            
-            st.markdown(f"""
-                <div class="client-card">
-                    <h2 style="margin:0; color:#00e676;">{nazwisko}</h2>
-                    <div style="margin: 10px 0; color:#e0e0e0;">
-                        <span>📅 <b>Kontakt:</b> {data_k}</span><br>
-                        <span style="font-size: 0.9em; opacity: 0.8;">📍 {esencja}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if st.button(f"Szczegóły: {nazwisko}", key=f"btn_{index}", use_container_width=True):
-                st.session_state['selected_client'] = row
+if df.empty:
+    st.warning("Brak danych lub błąd połączenia.")
+    st.stop()
+
+# --- WIDOK: START (W realizacji) ---
+if st.session_state.view == "Start":
+    st.subheader("🏠 W realizacji")
+    # Filtrujemy wiersze, które zawierają frazę "W realizacji"
+    active_df = df[df.apply(lambda row: row.astype(str).str.contains("W realizacji", case=False).any(), axis=1)]
+    
+    if not active_df.empty:
+        for i, row in active_df.iterrows():
+            st.markdown(f"""<div class="client-card">
+                <b>{row.iloc[0]}</b><br>📍 {row.iloc[3]}
+            </div>""", unsafe_allow_html=True)
+            if st.button(f"Szczegóły: {row.iloc[0]}", key=f"start_{i}"):
+                st.session_state.selected_client = row
                 st.switch_page("pages/details.py")
     else:
-        st.info("Pobieranie danych...")
+        st.write("Brak aktywnych budów.")
 
-elif st.session_state.view == "Start":
-    st.title("🏠 Panel Główny")
-    st.write("Witaj w systemie! Wybierz 'Klienci', aby zobaczyć listę.")
+# --- WIDOK: KLIENCI (Baza) ---
+elif st.session_state.view == "Klienci":
+    st.subheader("👥 Baza Klientów")
+    search = st.text_input("", placeholder="Szukaj klienta...").lower()
+    
+    df_display = df.copy()
+    if search:
+        df_display = df_display[df_display.apply(lambda row: search in str(row.iloc[0]).lower() or search in str(row.iloc[3]).lower(), axis=1)]
 
-elif st.session_state.view == "Dodaj":
-    st.title("➕ Dodaj nowe zlecenie")
-    st.write("Tutaj w przyszłości dodamy formularz szybkiego dodawania klienta.")
+    for i, row in df_display.iterrows():
+        st.markdown(f"""
+            <div class="client-card">
+                <h3 style="margin:0; color:#00e676;">{row.iloc[0]}</h3>
+                <div style="margin: 10px 0; color:#e0e0e0;">
+                    <span>📅 <b>Data:</b> {row.iloc[1] if len(row)>1 else "---"}</span><br>
+                    <span>📍 {row.iloc[3] if len(row)>3 else "Brak adresu"}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        if st.button("Otwórz kartę", key=f"kli_{i}", use_container_width=True):
+            st.session_state.selected_client = row
+            st.switch_page("pages/details.py")
 
-# Sidebar
-st.sidebar.button("🔄 Odśwież dane", on_click=lambda: st.rerun())
+# --- WIDOK: ZADANIA ---
+elif st.session_state.view == "Zadania":
+    st.subheader("✅ Twoje Zadania")
+    st.info("Tutaj pojawią się zadania z kolumny terminarza.")
+
+# Sidebar (ukryty, ale dostępny pod przyciskiem odśwież)
+if st.sidebar.button("🔄 Odśwież dane"):
+    st.rerun()
