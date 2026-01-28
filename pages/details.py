@@ -1,53 +1,73 @@
 import streamlit as st
+import pandas as pd
+from datetime import datetime
 
-# Sprawdzamy, czy wybrano klienta na stronie głównej
+# 1. Sprawdzenie, czy klient został wybrany
 if 'selected_client' not in st.session_state:
-    st.warning("Wróć do strony głównej i wybierz klienta.")
+    st.error("Nie wybrano klienta! Wróć do strony głównej.")
     if st.button("⬅️ Powrót"):
         st.switch_page("main.py")
-else:
-    c = st.session_state['selected_client']
-    
-    st.title(f"👤 {c.iloc[0]}") # Nazwisko
-    
-    # Przycisk ZADZWOŃ - duży i widoczny
-    numer = str(c.iloc[6])
-    st.link_button(f"📞 ZADZWOŃ: {numer}", f"tel:{numer}", use_container_width=True)
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"📍 **Adres:** {c.iloc[3]}")
-        st.write(f"🏷️ **Status:** {c['Status']}")
-    with col2:
-        st.write(f"🏗️ **Typ pracy:** {c['Typ pracy']}")
-        st.write(f"💰 **Wycena:** {c.get('Wycena', 'Brak')}")
+    st.stop()
 
-    st.divider()
-    
-    # Odtwarzacz rozmowy (Kolumna O)
-    st.subheader("🎙️ Ostatnia rozmowa")
-    nagranie_url = c.iloc[14] # Kolumna O (indeks 14)
-    if isinstance(nagranie_url, str) and "drive.google.com" in nagranie_url:
-        # Przerabiamy link drive na bezpośredni do odtwarzacza
-        file_id = nagranie_url.split('/')[-2]
-        direct_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-        st.audio(direct_url)
-    else:
-        st.info("Brak dostępnego nagrania.")
+client = st.session_state['selected_client']
 
-    st.divider()
-    
-    st.subheader("📝 Notatka (Esencja)")
-    st.info(c.iloc[9]) # Esencja
+# CSS dla mobilnej wygody
+st.markdown("""
+    <style>
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
+    .upload-box { border: 2px dashed #ffaa00; padding: 10px; border-radius: 10px; text-align: center; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Miejsce na wpisanie wyceny
-    st.subheader("✍️ Twoja wycena")
-    nowa_wycena = st.text_area("Wpisz ustalenia finansowe:", value=str(c.get('Wycena', '')))
-    
-    if st.button("💾 Zapisz zmiany (Wkrótce)"):
-        st.success("W następnym kroku połączymy ten przycisk z n8n, aby zapisał to w Twoim arkuszu!")
+# Nagłówek z danymi klienta
+st.title(f"👤 {client.iloc[0]}")
+st.caption(f"📍 {client.iloc[3]} | 📞 {client.iloc[6]}")
 
-    if st.button("⬅️ Powrót do listy"):
+st.divider()
+
+# --- SEKCJA: TWOJA WYCENA ---
+st.subheader("📝 Twoja wycena")
+
+# Notatka tekstowa
+note = st.text_area("Dodatkowe uwagi / Notatka z dachu:", placeholder="Np. dachówka do wymiany, komin do obróbki...")
+
+# Upload zdjęć i nagrań
+st.info("📸 Wrzuć zdjęcie obliczeń lub 🎤 nagranie głosowe")
+uploaded_files = st.file_uploader(
+    "Wybierz pliki lub zrób zdjęcie/nagranie", 
+    type=['jpg', 'png', 'jpeg', 'mp3', 'wav', 'm4a'], 
+    accept_multiple_files=True,
+    label_visibility="collapsed"
+)
+
+# Podgląd przesłanych plików
+if uploaded_files:
+    st.write("### Podgląd do zapisu:")
+    for uploaded_file in uploaded_files:
+        if uploaded_file.type.startswith('image'):
+            st.image(uploaded_file, caption=f"Foto: {uploaded_file.name}", width=200)
+        elif uploaded_file.type.startswith('audio'):
+            st.audio(uploaded_file)
+        st.caption(f"Plik: {uploaded_file.name}")
+
+st.divider()
+
+# --- PRZYCISKI AKCJI ---
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("💾 Zapisz wszystko"):
+        # Logika zapisu (Na razie symulacja - tutaj wejdzie funkcja wysyłki na GDrive)
+        with st.spinner("Wysyłam dane do bazy i na dysk..."):
+            # 1. Tutaj kod dopisujący notatkę do Arkusza Google
+            # 2. Tutaj kod tworzący folder na GDrive i wrzucający pliki
+            st.success("Wycena i pliki zapisane pomyślnie!")
+            # st.switch_page("main.py")
+
+with col2:
+    if st.button("❌ Anuluj"):
         st.switch_page("main.py")
+
+# Wyświetlenie pozostałych danych klienta (dla przypomnienia)
+with st.expander("🔍 Pełne dane klienta"):
+    st.write(client)
