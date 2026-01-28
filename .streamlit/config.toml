@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#00e676" # Intensywna zieleń dla przycisków i akcentów
+backgroundColor = "#0e1117" # Głęboka czerń tła
+secondaryBackgroundColor = "#1d2129" # Ciemnoszary dla kafelków
+textColor = "#e0e0e0" # Jasnoszary dla tekstu (czytelny)
+font = "sans serif"
