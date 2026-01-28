@@ -6,18 +6,18 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 import json
 
-# 1. Funkcja łącząca z Google Drive (korzysta z Twoich Secrets)
+# 1. Funkcja autoryzacji z Google Drive
 def get_gdrive_service():
     try:
-        # Odczytujemy JSON z Twoich Secrets
+        # Pobieranie danych z Twoich Secrets w Streamlit Cloud
         info = json.loads(st.secrets["gcp_service_account"])
         creds = service_account.Credentials.from_service_account_info(info)
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
-        st.error(f"Błąd autoryzacji Google: {e}")
+        st.error(f"Błąd połączenia z Google: {e}")
         return None
 
-# 2. Funkcja wysyłająca plik do konkretnego folderu
+# 2. Funkcja wysyłki z poprawką na brak limitu miejsca (Quota)
 def upload_to_gdrive(file, client_name):
     try:
         service = get_gdrive_service()
@@ -25,29 +25,34 @@ def upload_to_gdrive(file, client_name):
         
         folder_id = st.secrets["drive_folder_id"]
         
+        # Przygotowanie metadanych pliku
         file_metadata = {
             'name': f"{client_name}_{file.name}",
             'parents': [folder_id]
         }
         
+        # Konwersja pliku ze Streamlita na format akceptowany przez Google
         buffer = io.BytesIO(file.getvalue())
         media = MediaIoBaseUpload(buffer, mimetype=file.type, resumable=True)
         
+        # KLUCZOWA POPRAWKA: supportsAllDrives=True pozwala na zapis w Twoim folderze
         uploaded_file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id'
+            fields='id',
+            supportsAllDrives=True 
         ).execute()
+        
         return uploaded_file.get('id')
     except Exception as e:
-        st.error(f"Błąd wysyłki pliku {file.name}: {e}")
+        st.error(f"Szczegółowy błąd wysyłki: {e}")
         return None
 
-# --- UI APLIKACJI ---
+# --- INTERFEJS UŻYTKOWNIKA (UI) ---
 
-# Sprawdzamy czy użytkownik wszedł tu legalnie (wybrał klienta na Start)
+# Zabezpieczenie przed wejściem bez wybranego klienta
 if 'selected_client' not in st.session_state:
-    st.warning("⚠️ Nie wybrano klienta. Wróć do strony głównej.")
+    st.warning("⚠️ Brak wybranego klienta. Wróć do listy.")
     if st.button("⬅️ Powrót"):
         st.switch_page("main.py")
     st.stop()
@@ -55,18 +60,18 @@ if 'selected_client' not in st.session_state:
 client = st.session_state['selected_client']
 client_name = str(client.iloc[0])
 
-# Layout strony
+# Wyświetlanie nagłówka z danymi klienta
 st.title(f"👤 {client_name}")
 st.caption(f"📍 {client.iloc[3]} | 📞 {client.iloc[6]}")
 st.divider()
 
-# SEKCJA WYCENY
-st.subheader("📝 Twoja wycena")
-note = st.text_area("Dodatkowe uwagi / notatka z dachu:", placeholder="Opisz co trzeba zrobić...")
+# Sekcja 1: Notatka tekstowa
+st.subheader("📝 Notatki i Wycena")
+note = st.text_area("Twoje uwagi z dachu:", placeholder="Np. wymiary, stan rynien, wycena...")
 
-# SEKCJA MULTIMEDIÓW
+# Sekcja 2: Multimedia (Zdjęcia/Głos)
 st.markdown("### 📸 Multimedia")
-st.caption("Możesz zrobić zdjęcie wyceny na papierze lub nagrać głos (dyktafon).")
+st.caption("Dodaj zdjęcia dokumentów, dachu lub nagraj notatkę głosową.")
 uploaded_files = st.file_uploader(
     "Wybierz pliki", 
     type=['jpg', 'png', 'jpeg', 'mp3', 'wav', 'm4a'], 
@@ -74,25 +79,27 @@ uploaded_files = st.file_uploader(
     label_visibility="collapsed"
 )
 
-# Podgląd plików przed wysyłką
+# Podgląd wybranych plików przed wysłaniem
 if uploaded_files:
-    for f in uploaded_files:
-        if f.type.startswith('image'):
-            st.image(f, width=200)
-        else:
-            st.audio(f)
+    cols = st.columns(3)
+    for idx, f in enumerate(uploaded_files):
+        with cols[idx % 3]:
+            if f.type.startswith('image'):
+                st.image(f, use_container_width=True)
+            else:
+                st.audio(f)
 
 st.divider()
 
-# PRZYCISKI AKCJI
-col1, col2 = st.columns(2)
+# Sekcja 3: Przyciski akcji
+col_save, col_back = st.columns(2)
 
-with col1:
-    if st.button("💾 ZAPISZ I WYŚLIJ", use_container_width=True):
+with col_save:
+    if st.button("💾 ZAPISZ WSZYSTKO", use_container_width=True):
         if not uploaded_files and not note:
-            st.warning("Nic nie dodałeś!")
+            st.warning("Dodaj notatkę lub chociaż jedno zdjęcie!")
         else:
-            with st.spinner("Wysyłam na Google Drive..."):
+            with st.spinner("Przesyłam dane do Twojego folderu Google Drive..."):
                 success_count = 0
                 if uploaded_files:
                     for f in uploaded_files:
@@ -100,15 +107,17 @@ with col1:
                         if file_id:
                             success_count += 1
                 
-                # Tutaj możesz dodać zapisywanie 'note' do Arkusza Google
-                
-                st.success(f"✅ Zapisano pomyślnie! Wysłano plików: {success_count}")
-                st.balloons()
+                # Sukces
+                if success_count > 0 or note:
+                    st.success(f"✅ Gotowe! Wysłano plików: {success_count}")
+                    if note:
+                        st.info("Notatka została przygotowana do zapisu (wkrótce połączymy z Arkuszem).")
+                    st.balloons()
 
-with col2:
-    if st.button("❌ ANULUJ", use_container_width=True):
+with col_back:
+    if st.button("⬅️ POWRÓT DO LISTY", use_container_width=True):
         st.switch_page("main.py")
 
-# Opcjonalne: pełny podgląd danych z Arkusza
-with st.expander("📄 Zobacz wszystkie dane klienta"):
+# Opcjonalny wgląd w pełne dane klienta
+with st.expander("📄 Zobacz pełną kartę klienta"):
     st.write(client)
