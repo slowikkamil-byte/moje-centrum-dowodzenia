@@ -68,4 +68,14 @@ try:
                     st.session_state['selected_client'] = row
                     st.switch_page("pages/details.py") # Przejście do szczegółów
 
-    elif selected == "Aktualności":
+  elif selected == "Aktualności":
+        st.header("⚡ Ostatnie rozmowy")
+        # Wyświetlamy 5 najnowszych wpisów (od dołu arkusza)
+        if not df.empty:
+            for i in range(len(df)-1, max(-1, len(df)-6), -1):
+                row = df.iloc[i]
+                with st.expander(f"📌 {row.iloc[0]} - {row.iloc[3]}"):
+                    st.write(f"📞 {row.iloc[6]}")
+                    st.info(f"💡 Esencja: {row.iloc[9]}")
+        else:
+            st.info("Brak danych w arkuszu.")
