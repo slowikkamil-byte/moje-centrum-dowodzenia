@@ -1,38 +1,71 @@
 import streamlit as st
 import pandas as pd
+from streamlit_option_menu import option_menu # Dodaj to do requirements.txt
 
+# Konfiguracja strony
 st.set_page_config(page_title="Dekarz CRM", layout="wide", page_icon="🏠")
 
-# Link do Twojego Arkusza w formacie CSV
+# Link CSV (pamiętaj o końcówce export?format=csv)
 URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/export?format=csv"
 
-st.title("⚒️ System Zarządzania Zleceniami")
+# Wczytywanie danych
+@st.cache_data(ttl=10) # Odświeżaj co 10 sekund
+def load_data():
+    df = pd.read_csv(URL)
+    return df
 
 try:
-    # Wczytywanie danych
-    df = pd.read_csv(URL)
+    df = load_data()
     
-    # Wyświetlanie ostatniego zlecenia jako duża karta
-    if not df.empty:
-        ostatnie = df.iloc[-1]
-        st.subheader("🔔 Najnowsze ustalenia")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Klient", ostatnie.iloc[0]) # Zakładam, że Nazwisko to 1 kolumna
-            st.write(f"📍 **Adres:** {ostatnie.iloc[3]}")
-        with col2:
-            st.metric("Termin", ostatnie.iloc[4])
-            st.write(f"📞 **Telefon:** {ostatnie.iloc[6]}")
+    # --- PASEK WYSZUKIWANIA ---
+    search_query = st.text_input("🔍 Szukaj (ulica, miasto, nazwisko, telefon...)", "").lower()
+
+    # --- DOLNE MENU (Nawigacja) ---
+    selected = option_menu(
+        menu_title=None,
+        options=["Start", "Aktualności", "Klienci", "Telefony", "Zadania"],
+        icons=["house", "lightning", "people", "telephone", "check2-square"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "#111"},
+            "icon": {"color": "orange", "font-size": "18px"}, 
+            "nav-link": {"font-size": "14px", "text-align": "center", "margin":"0px", "--hover-color": "#333"},
+            "nav-link-selected": {"background-color": "#444"},
+        }
+    )
+
+    if selected == "Start":
+        st.header("🏗️ W realizacji")
         
-        st.info(f"💡 **Esencja:** {ostatnie.iloc[9]}") # Pole Esencja
+        # Filtrowanie po statusie "W realizacji"
+        df_active = df[df['Status'] == "W realizacji"]
+        
+        # Logika wyszukiwania
+        if search_query:
+            df_active = df_active[df_active.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)]
 
-    st.divider()
-    st.header("📋 Pełna lista zleceń")
-    st.dataframe(df.iloc[::-1], use_container_width=True) # Odwrócona kolejność (najnowsze na górze)
+        # Wyświetlanie kafelków
+        cols = st.columns(2) # 2 kafelki w rzędzie na telefonie
+        for index, row in df_active.iterrows():
+            # Kolorystyka w zależności od Typu Pracy
+            typ = str(row['Typ pracy']).lower()
+            color = "#31333F" # Standard
+            if "malowanie" in typ: color = "#FF4B4B"
+            elif "elewacja" in typ: color = "#00CC96"
+            elif "przekrywka" in typ: color = "#636EFA"
 
-except Exception as e:
-    st.error(f"Czekam na dane z arkusza... (Upewnij się, że arkusz nie jest pusty)")
+            with cols[index % 2]:
+                st.markdown(f"""
+                <div style="background-color:{color}; padding:20px; border-radius:15px; margin-bottom:10px; cursor:pointer;">
+                    <h3 style="margin:0;">{row.iloc[0]}</h3>
+                    <p style="margin:5px 0;">📍 {row.iloc[3]}</p>
+                    <p style="margin:0;">📞 {row.iloc[6]}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Szczegóły: {row.iloc[0]}", key=index):
+                    st.session_state['selected_client'] = row
+                    st.switch_page("pages/details.py") # Przejście do szczegółów
 
-# Automatyczne odświeżanie co 30 sekund
-st.empty()
-st.caption("Dane aktualizują się automatycznie co 30 sekund.")
+    elif selected == "Aktualności":
