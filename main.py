@@ -6,7 +6,7 @@ from streamlit_option_menu import option_menu # Dodaj to do requirements.txt
 st.set_page_config(page_title="Dekarz CRM", layout="wide", page_icon="🏠")
 
 # Link CSV (pamiętaj o końcówce export?format=csv)
-URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/export?format=csv"
+URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/export?format=csv
 
 # Wczytywanie danych
 @st.cache_data(ttl=10) # Odświeżaj co 10 sekund
