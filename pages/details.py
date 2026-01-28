@@ -1,64 +1,58 @@
 import streamlit as st
 import pandas as pd
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import json
 
-# 1. Sprawdzanie wyboru klienta
+# 1. Funkcja połączenia
+def get_gdrive_service():
+    info = json.loads(st.secrets["gcp_service_account"])
+    creds = service_account.Credentials.from_service_account_info(info)
+    return build('drive', 'v3', credentials=creds)
+
+# 2. Pobieranie zdjęć (szukamy plików zawierających nazwisko klienta w nazwie)
+def get_photos(client_name):
+    try:
+        service = get_gdrive_service()
+        f_id = st.secrets["drive_folder_id"]
+        query = f"'{f_id}' in parents and name contains '{client_name}'"
+        res = service.files().list(q=query, fields="files(id, name, thumbnailLink)").execute()
+        return res.get('files', [])
+    except:
+        return []
+
+# --- UI ---
 if 'selected_client' not in st.session_state:
-    st.warning("⚠️ Nie wybrano klienta!")
-    if st.button("⬅️ Powrót"):
-        st.switch_page("main.py")
-    st.stop()
-
-client = st.session_state['selected_client']
-client_name = str(client.iloc[0])
-
-# Stylizacja przycisku
-st.markdown("""
-    <style>
-    .stDownloadButton, .stButton button {
-        border-radius: 12px;
-        height: 4em;
-        font-weight: bold;
-    }
-    .form-button {
-        background-color: #673ab7 !important;
-        color: white !important;
-        padding: 20px;
-        text-align: center;
-        border-radius: 10px;
-        text-decoration: none;
-        display: block;
-        margin-bottom: 20px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title(f"👤 {client_name}")
-st.caption(f"📍 {client.iloc[3]} | 📞 {client.iloc[6]}")
-st.divider()
-
-# SEKCJA NOTATEK
-st.subheader("📝 Notatki i Wycena")
-st.info("Tutaj możesz zapisać swoje uwagi (notatka zostanie w aplikacji do czasu odświeżenia).")
-note = st.text_area("Twoje spostrzeżenia z dachu:", placeholder="Opisz stan dachu, wymiary...")
-
-if st.button("💾 ZAPISZ NOTATKĘ LOKALNIE"):
-    st.success("Notatka została tymczasowo zapamiętana!")
-
-st.divider()
-
-# SEKCJA MULTIMEDIÓW - ROZWIĄZANIE PROBLEMU
-st.subheader("📸 Zdjęcia i Nagrania")
-st.write("Aby dodać zdjęcia lub nagrania głosowe, kliknij poniższy przycisk. Przeniesie Cię on do bezpiecznego formularza Google, który nie blokuje przesyłu plików.")
-
-# PODMIEŃ TEN LINK NA SWÓJ LINK DO FORMULARZA
-form_url = "https://docs.google.com/forms/d/e/1FAIpQLSfwVDwAYR4sfDJoVs0oW5vL3M03M28H_x_ap9ZL9IvH-k_Z-Q/viewform?usp=publish-editor"
-
-st.link_button("🚀 OTWÓRZ APARAT / DODAJ PLIKI", form_url, use_container_width=True)
-
-st.divider()
-
-if st.button("⬅️ POWRÓT DO LISTY", use_container_width=True):
     st.switch_page("main.py")
 
-with st.expander("📄 Dane klienta z arkusza"):
-    st.write(client)
+client = st.session_state['selected_client']
+client_name = str(client.iloc[0]) # Zakładam, że nazwisko jest w 1. kolumnie
+
+st.title(f"👤 {client_name}")
+st.divider()
+
+# SEKCJA ZDJĘĆ
+st.subheader("🖼️ Zdjęcia tego klienta")
+photos = get_photos(client_name)
+if photos:
+    cols = st.columns(3)
+    for i, p in enumerate(photos):
+        with cols[i % 3]:
+            st.image(p['thumbnailLink'].replace('=s220', '=s500'), use_container_width=True)
+else:
+    st.info("Nie znaleziono jeszcze zdjęć dla tego klienta.")
+
+# PRZYCISK FORMULARZA
+st.link_button("➕ DODAJ ZDJĘCIA (FORMULARZ)", "TWOJ_LINK_DO_FORMULARZA", use_container_width=True)
+
+st.divider()
+
+# SEKCJA NOTATKI
+st.subheader("📝 Notatka do arkusza")
+note = st.text_area("Wpisz uwagi (trafi do kolumny M):")
+if st.button("💾 ZAPISZ NOTATKĘ"):
+    # Tutaj w przyszłości dodamy funkcję update_sheet(client_name, note)
+    st.success("Notatka gotowa do wysłania!")
+
+if st.button("⬅️ POWRÓT"):
+    st.switch_page("main.py")
