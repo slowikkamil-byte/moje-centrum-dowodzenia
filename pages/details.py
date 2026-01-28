@@ -6,17 +6,17 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 import json
 
-# 1. Funkcja autoryzacji
+# 1. Autoryzacja
 def get_gdrive_service():
     try:
         info = json.loads(st.secrets["gcp_service_account"])
         creds = service_account.Credentials.from_service_account_info(info)
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
-        st.error(f"Błąd konfiguracji kluczy: {e}")
+        st.error(f"Błąd kluczy: {e}")
         return None
 
-# 2. Funkcja wysyłki - wersja odporna na błąd Quota
+# 2. Funkcja wysyłki z ominięciem limitów konta usługi
 def upload_to_gdrive(file, client_name):
     try:
         service = get_gdrive_service()
@@ -29,34 +29,30 @@ def upload_to_gdrive(file, client_name):
             'parents': [folder_id]
         }
         
+        # Przygotowanie danych pliku
         buffer = io.BytesIO(file.getvalue())
         
-        # ZMIANA: resumable=False. To kluczowe przy błędzie 'storageQuotaExceeded' 
-        # dla kont usług na darmowych dyskach Google.
+        # resumable=False jest kluczowe dla darmowych kont, aby uniknąć błędu 403
         media = MediaIoBaseUpload(buffer, mimetype=file.type, resumable=False)
         
         uploaded_file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id',
-            supportsAllDrives=True
+            supportsAllDrives=True,
+            ignoreDefaultVisibility=True
         ).execute()
         
         return uploaded_file.get('id')
     except Exception as e:
-        # Wyświetlamy czytelny błąd dla użytkownika
-        if "storageQuotaExceeded" in str(e):
-            st.error("Błąd: Google blokuje miejsce konta usługi. Upewnij się, że Twój prywatny Dysk Google nie jest pełny i folder jest poprawnie udostępniony.")
-        else:
-            st.error(f"Błąd wysyłki: {e}")
+        st.error(f"Google nadal blokuje zapis: {e}")
         return None
 
 # --- UI APLIKACJI ---
 
 if 'selected_client' not in st.session_state:
     st.warning("⚠️ Nie wybrano klienta!")
-    if st.button("⬅️ Powrót"):
-        st.switch_page("main.py")
+    if st.button("⬅️ Powrót"): st.switch_page("main.py")
     st.stop()
 
 client = st.session_state['selected_client']
@@ -66,9 +62,11 @@ st.title(f"👤 {client_name}")
 st.caption(f"📍 {client.iloc[3]} | 📞 {client.iloc[6]}")
 st.divider()
 
-st.subheader("📝 Wycena i Notatki")
-note = st.text_area("Twoje uwagi (zapisywane lokalnie):", placeholder="Wpisz notatkę...")
+# SEKCJA WYCENY
+st.subheader("📝 Notatki")
+note = st.text_area("Twoje uwagi (zapis lokalny w sesji):", placeholder="Wpisz notatkę...")
 
+# SEKCJA MULTIMEDIÓW
 st.markdown("### 📸 Zdjęcia i Nagrania")
 uploaded_files = st.file_uploader(
     "Wgraj pliki", 
@@ -93,7 +91,7 @@ col_save, col_back = st.columns(2)
 with col_save:
     if st.button("💾 ZAPISZ NA DYSKU", use_container_width=True):
         if not uploaded_files:
-            st.warning("Dodaj przynajmniej jedno zdjęcie lub nagranie.")
+            st.warning("Dodaj plik, aby przetestować zapis.")
         else:
             with st.spinner("Przesyłam..."):
                 success_count = 0
@@ -103,12 +101,12 @@ with col_save:
                         success_count += 1
                 
                 if success_count > 0:
-                    st.success(f"✅ Przesłano plików: {success_count}")
+                    st.success(f"✅ Sukces! Pliki na dysku: {success_count}")
                     st.balloons()
 
 with col_back:
     if st.button("⬅️ POWRÓT", use_container_width=True):
         st.switch_page("main.py")
 
-with st.expander("📄 Dane z arkusza"):
+with st.expander("📄 Dane klienta"):
     st.write(client)
