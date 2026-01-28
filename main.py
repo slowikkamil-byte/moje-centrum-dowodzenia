@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 # Konfiguracja strony
 st.set_page_config(page_title="CRM Dekarski", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: Cienka zielona ramka (2px), czyste karty i pełna szerokość przycisków mobilnych
+# CSS: Ramka 2px, Dark Mode i pełna szerokość przycisków na mobilkach
 st.markdown("""
     <style>
     .client-card {
@@ -16,35 +16,36 @@ st.markdown("""
         margin-bottom: 20px;
         background-color: #1d2129;
     }
-    /* Styl dla wszystkich przycisków */
     .stButton button {
         background-color: transparent;
         border: 1px solid #00e676;
         color: #00e676;
-        width: 100%; /* Pełna szerokość na mobilkach */
+        width: 100%;
         border-radius: 8px;
-        transition: 0.3s;
-        height: 3em;
-        margin-bottom: 10px;
+        height: 3.5em;
+        font-weight: bold;
     }
     .stButton button:hover {
         background-color: #00e676;
         color: #1d2129;
     }
-    /* Usunięcie zbędnych marginesów w kolumnach na mobilkach */
+    /* Równe rozłożenie i pełna szerokość w widoku mobilnym */
     [data-testid="column"] {
         width: 100% !important;
-        flex: 1 1 calc(33.333% - 1rem) !important;
+        flex: 1 1 auto !important;
         min-width: 100% !important;
+        margin-bottom: 5px;
     }
     @media (min-width: 768px) {
         [data-testid="column"] {
             min-width: 0 !important;
+            flex: 1 1 0% !important;
         }
     }
     </style>
     """, unsafe_allow_html=True)
 
+# Funkcja pobierania danych
 def get_data():
     try:
         info = st.secrets["gcp_service_account"]
@@ -62,56 +63,63 @@ def get_data():
         st.error(f"Błąd połączenia: {e}")
         return pd.DataFrame()
 
-st.title("🏗️ Twoje Zlecenia")
+# --- NAWIGACJA (TWOJE PRZYCISKI) ---
+if 'view' not in st.session_state:
+    st.session_state.view = "Klienci"
 
-df = get_data()
+m1, m2, m3 = st.columns(3)
+with m1:
+    if st.button("🏗️ START", use_container_width=True): 
+        st.session_state.view = "Start"
+with m2:
+    if st.button("👥 KLIENCI", use_container_width=True): 
+        st.session_state.view = "Klienci"
+with m3:
+    if st.button("➕ DODAJ", use_container_width=True): 
+        st.session_state.view = "Dodaj"
 
-if not df.empty:
-    # 1. WYSZUKIWARKA
-    search = st.text_input("🔍 Szukaj klienta...", placeholder="Wpisz nazwisko lub adres...").lower()
+st.divider()
+
+# --- LOGIKA WIDOKÓW ---
+if st.session_state.view == "Klienci":
+    st.title("🏗️ Lista Klientów")
     
-    # 2. TWOJE ORYGINALNE 3 PRZYCISKI (Pełna szerokość na mobilnych)
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("📞 Do zadzwonienia", use_container_width=True):
-            search = "do zadzwonienia"
-    with col2:
-        if st.button("📝 Do wyceny", use_container_width=True):
-            search = "do wyceny"
-    with col3:
-        if st.button("📅 Umówione", use_container_width=True):
-            search = "umówione"
-
-    if search:
-        # Filtrowanie po Nazwisku (0), Esencji (3) lub Statusie (10)
-        df = df[df.apply(lambda row: search in str(row.iloc[0]).lower() or 
-                                     search in str(row.iloc[3]).lower() or 
-                                     search in str(row.iloc[10]).lower(), axis=1)]
-
-    st.write("") 
-
-    # 3. LISTA KLIENTÓW W RAMKACH 2PX
-    for index, row in df.iterrows():
-        nazwisko = row.iloc[0]
-        data_k = row.iloc[1] if len(row) > 1 else "---"
-        esencja = str(row.iloc[3]) if len(row) > 3 else "Brak opisu"
+    df = get_data()
+    
+    if not df.empty:
+        search = st.text_input("🔍 Szukaj...", placeholder="Nazwisko, adres...").lower()
         
-        st.markdown(f"""
-            <div class="client-card">
-                <h2 style="margin:0; color:#00e676;">{nazwisko}</h2>
-                <div style="margin: 10px 0; color:#e0e0e0;">
-                    <span>📅 <b>Kontakt:</b> {data_k}</span><br>
-                    <span style="font-size: 0.9em; opacity: 0.8;">📍 {esencja}</span>
+        if search:
+            df = df[df.apply(lambda row: search in str(row.iloc[0]).lower() or search in str(row.iloc[3]).lower(), axis=1)]
+
+        for index, row in df.iterrows():
+            nazwisko = row.iloc[0]
+            data_k = row.iloc[1] if len(row) > 1 else "---"
+            esencja = str(row.iloc[3]) if len(row) > 3 else "Brak opisu"
+            
+            st.markdown(f"""
+                <div class="client-card">
+                    <h2 style="margin:0; color:#00e676;">{nazwisko}</h2>
+                    <div style="margin: 10px 0; color:#e0e0e0;">
+                        <span>📅 <b>Kontakt:</b> {data_k}</span><br>
+                        <span style="font-size: 0.9em; opacity: 0.8;">📍 {esencja}</span>
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if st.button(f"Szczegóły: {nazwisko}", key=f"btn_{index}", use_container_width=True):
-            st.session_state['selected_client'] = row
-            st.switch_page("pages/details.py")
-else:
-    st.info("Pobieranie danych z bazy...")
+                """, unsafe_allow_html=True)
+            
+            if st.button(f"Szczegóły: {nazwisko}", key=f"btn_{index}", use_container_width=True):
+                st.session_state['selected_client'] = row
+                st.switch_page("pages/details.py")
+    else:
+        st.info("Pobieranie danych...")
 
-st.sidebar.markdown("### Nawigacja")
-if st.sidebar.button("🔄 Odśwież listę"):
-    st.rerun()
+elif st.session_state.view == "Start":
+    st.title("🏠 Panel Główny")
+    st.write("Witaj w systemie! Wybierz 'Klienci', aby zobaczyć listę.")
+
+elif st.session_state.view == "Dodaj":
+    st.title("➕ Dodaj nowe zlecenie")
+    st.write("Tutaj w przyszłości dodamy formularz szybkiego dodawania klienta.")
+
+# Sidebar
+st.sidebar.button("🔄 Odśwież dane", on_click=lambda: st.rerun())
