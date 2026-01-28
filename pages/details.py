@@ -6,18 +6,17 @@ from googleapiclient.http import MediaIoBaseUpload
 import io
 import json
 
-# 1. Funkcja autoryzacji z Google Drive
+# 1. Funkcja autoryzacji
 def get_gdrive_service():
     try:
-        # Pobieranie danych z Twoich Secrets w Streamlit Cloud
         info = json.loads(st.secrets["gcp_service_account"])
         creds = service_account.Credentials.from_service_account_info(info)
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
-        st.error(f"Błąd połączenia z Google: {e}")
+        st.error(f"Błąd konfiguracji kluczy: {e}")
         return None
 
-# 2. Funkcja wysyłki z poprawką na brak limitu miejsca (Quota)
+# 2. Funkcja wysyłki - wersja odporna na błąd Quota
 def upload_to_gdrive(file, client_name):
     try:
         service = get_gdrive_service()
@@ -25,34 +24,37 @@ def upload_to_gdrive(file, client_name):
         
         folder_id = st.secrets["drive_folder_id"]
         
-        # Przygotowanie metadanych pliku
         file_metadata = {
             'name': f"{client_name}_{file.name}",
             'parents': [folder_id]
         }
         
-        # Konwersja pliku ze Streamlita na format akceptowany przez Google
         buffer = io.BytesIO(file.getvalue())
-        media = MediaIoBaseUpload(buffer, mimetype=file.type, resumable=True)
         
-        # KLUCZOWA POPRAWKA: supportsAllDrives=True pozwala na zapis w Twoim folderze
+        # ZMIANA: resumable=False. To kluczowe przy błędzie 'storageQuotaExceeded' 
+        # dla kont usług na darmowych dyskach Google.
+        media = MediaIoBaseUpload(buffer, mimetype=file.type, resumable=False)
+        
         uploaded_file = service.files().create(
             body=file_metadata,
             media_body=media,
             fields='id',
-            supportsAllDrives=True 
+            supportsAllDrives=True
         ).execute()
         
         return uploaded_file.get('id')
     except Exception as e:
-        st.error(f"Szczegółowy błąd wysyłki: {e}")
+        # Wyświetlamy czytelny błąd dla użytkownika
+        if "storageQuotaExceeded" in str(e):
+            st.error("Błąd: Google blokuje miejsce konta usługi. Upewnij się, że Twój prywatny Dysk Google nie jest pełny i folder jest poprawnie udostępniony.")
+        else:
+            st.error(f"Błąd wysyłki: {e}")
         return None
 
-# --- INTERFEJS UŻYTKOWNIKA (UI) ---
+# --- UI APLIKACJI ---
 
-# Zabezpieczenie przed wejściem bez wybranego klienta
 if 'selected_client' not in st.session_state:
-    st.warning("⚠️ Brak wybranego klienta. Wróć do listy.")
+    st.warning("⚠️ Nie wybrano klienta!")
     if st.button("⬅️ Powrót"):
         st.switch_page("main.py")
     st.stop()
@@ -60,26 +62,21 @@ if 'selected_client' not in st.session_state:
 client = st.session_state['selected_client']
 client_name = str(client.iloc[0])
 
-# Wyświetlanie nagłówka z danymi klienta
 st.title(f"👤 {client_name}")
 st.caption(f"📍 {client.iloc[3]} | 📞 {client.iloc[6]}")
 st.divider()
 
-# Sekcja 1: Notatka tekstowa
-st.subheader("📝 Notatki i Wycena")
-note = st.text_area("Twoje uwagi z dachu:", placeholder="Np. wymiary, stan rynien, wycena...")
+st.subheader("📝 Wycena i Notatki")
+note = st.text_area("Twoje uwagi (zapisywane lokalnie):", placeholder="Wpisz notatkę...")
 
-# Sekcja 2: Multimedia (Zdjęcia/Głos)
-st.markdown("### 📸 Multimedia")
-st.caption("Dodaj zdjęcia dokumentów, dachu lub nagraj notatkę głosową.")
+st.markdown("### 📸 Zdjęcia i Nagrania")
 uploaded_files = st.file_uploader(
-    "Wybierz pliki", 
+    "Wgraj pliki", 
     type=['jpg', 'png', 'jpeg', 'mp3', 'wav', 'm4a'], 
     accept_multiple_files=True,
     label_visibility="collapsed"
 )
 
-# Podgląd wybranych plików przed wysłaniem
 if uploaded_files:
     cols = st.columns(3)
     for idx, f in enumerate(uploaded_files):
@@ -91,33 +88,27 @@ if uploaded_files:
 
 st.divider()
 
-# Sekcja 3: Przyciski akcji
 col_save, col_back = st.columns(2)
 
 with col_save:
-    if st.button("💾 ZAPISZ WSZYSTKO", use_container_width=True):
-        if not uploaded_files and not note:
-            st.warning("Dodaj notatkę lub chociaż jedno zdjęcie!")
+    if st.button("💾 ZAPISZ NA DYSKU", use_container_width=True):
+        if not uploaded_files:
+            st.warning("Dodaj przynajmniej jedno zdjęcie lub nagranie.")
         else:
-            with st.spinner("Przesyłam dane do Twojego folderu Google Drive..."):
+            with st.spinner("Przesyłam..."):
                 success_count = 0
-                if uploaded_files:
-                    for f in uploaded_files:
-                        file_id = upload_to_gdrive(f, client_name)
-                        if file_id:
-                            success_count += 1
+                for f in uploaded_files:
+                    file_id = upload_to_gdrive(f, client_name)
+                    if file_id:
+                        success_count += 1
                 
-                # Sukces
-                if success_count > 0 or note:
-                    st.success(f"✅ Gotowe! Wysłano plików: {success_count}")
-                    if note:
-                        st.info("Notatka została przygotowana do zapisu (wkrótce połączymy z Arkuszem).")
+                if success_count > 0:
+                    st.success(f"✅ Przesłano plików: {success_count}")
                     st.balloons()
 
 with col_back:
-    if st.button("⬅️ POWRÓT DO LISTY", use_container_width=True):
+    if st.button("⬅️ POWRÓT", use_container_width=True):
         st.switch_page("main.py")
 
-# Opcjonalny wgląd w pełne dane klienta
-with st.expander("📄 Zobacz pełną kartę klienta"):
+with st.expander("📄 Dane z arkusza"):
     st.write(client)
