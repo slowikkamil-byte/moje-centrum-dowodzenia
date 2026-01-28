@@ -25,6 +25,6 @@ emails = pd.DataFrame([
     {"Temat": "Faktura do opłacenia", "Status": "🟡 DO SPRAWDZENIA"}
 ])
 st.table(emails)
-URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/edit?usp=sharing"
+URL = "https://docs.google.com/spreadsheets/d/1lR3he8b7zSmtd1OyMwV_O8CfBITlbPSUrZaoC_9cxQo/export?format=csv"
 df = pd.read_csv(URL)
 st.table(df.tail(5)) # Pokaże 5 ostatnich zleceń
