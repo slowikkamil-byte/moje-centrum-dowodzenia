@@ -51,7 +51,7 @@ st.subheader("📸 Zdjęcia i Nagrania")
 st.write("Aby dodać zdjęcia lub nagrania głosowe, kliknij poniższy przycisk. Przeniesie Cię on do bezpiecznego formularza Google, który nie blokuje przesyłu plików.")
 
 # PODMIEŃ TEN LINK NA SWÓJ LINK DO FORMULARZA
-form_url = "TUTAJ_WKLEJ_SWOJ_LINK_DO_FORMULARZA_GOOGLE"
+form_url = "https://docs.google.com/forms/d/1vnKSvjbBxdPCnJOvijQ94IbGFt4uyXObB8wHsf1Minc/edit"
 
 st.link_button("🚀 OTWÓRZ APARAT / DODAJ PLIKI", form_url, use_container_width=True)
 
