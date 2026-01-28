@@ -17,128 +17,111 @@ def load_data():
 
 df = load_data()
 
-# --- AGRESYWNY CSS (Wymuszamy poziome menu na dole) ---
+# --- CZARODZIEJSKI CSS (Naprawia menu i wyszukiwarkę) ---
 st.markdown("""
     <style>
-    /* Ukrycie paska bocznego i nagłówków */
+    /* Ukrywamy wszystko co zbędne */
     [data-testid="stSidebar"], .stDeployButton, header {display: none !important;}
-    
-    /* Marginesy treści */
-    .main .block-container { padding: 10px; margin-bottom: 100px; }
+    .main .block-container { padding: 10px 10px 120px 10px !important; }
 
-    /* PASEK NAWIGACJI NA DOLE (Jak na Twoim rysunku) */
-    .nav-wrapper {
+    /* STYLIZACJA WYSZUKIWARKI */
+    div[data-baseweb="input"] {
+        border-radius: 20px !important;
+        background-color: #1e1e1e !important;
+        border: 1px solid #ffaa00 !important;
+    }
+
+    /* PASEK DOLNY (NAWIGACJA) */
+    .nav-bar {
         position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
-        background-color: #111111;
+        background-color: #0e1117;
         display: flex;
         justify-content: space-around;
-        align-items: center;
         padding: 15px 0;
         border-top: 2px solid #ffaa00;
-        z-index: 99999;
+        z-index: 999999;
     }
     
-    .nav-button {
-        background: none;
-        border: none;
-        color: white;
-        text-align: center;
-        font-size: 24px;
-        text-decoration: none;
-        flex: 1;
-        cursor: pointer;
-    }
-
-    .nav-label {
-        font-size: 10px;
-        display: block;
-        margin-top: 2px;
-    }
+    /* Ukrycie domyślnych przycisków Streamlit w stopce, żeby zrobić miejsce na nasze */
+    [data-testid="stVerticalBlock"] > div:last-child { position: static !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# Zarządzanie zakładkami
+# Inicjalizacja zakładki
 if 'tab' not in st.session_state:
     st.session_state.tab = "Start"
 
-# --- WYSZUKIWARKA ---
-st.markdown("## 🏠 Dekarz CRM")
-# Używamy st.text_input. Jeśli wpiszesz fragment i klikniesz "Gotowe" na klawiaturze, zadziała natychmiast.
-search_query = st.text_input("Szukaj klienta...", placeholder="Wpisz np. 'war' lub nazwisko", label_visibility="collapsed").lower()
+# --- GÓRA: TYTUŁ I WYSZUKIWARKA ---
+st.markdown("### 🏠 Dekarz CRM")
+# Dynamiczna wyszukiwarka
+search_query = st.text_input("Szukaj...", placeholder="Wpisz np. 'war' lub nazwisko", label_visibility="collapsed").lower()
 
+# --- LOGIKA WYSZUKIWANIA ---
 if search_query and not df.empty:
     results = df[df.apply(lambda r: r.astype(str).str.contains(search_query, case=False).any(), axis=1)]
     if not results.empty:
-        st.write(f"🔎 Wyniki ({len(results)}):")
+        st.caption(f"Wyniki: {len(results)}")
         for i, row in results.iterrows():
             if st.button(f"👤 {row.iloc[0]} | {row.iloc[3]}", key=f"s_{i}", use_container_width=True):
                 st.session_state.selected_client = row
                 st.switch_page("pages/details.py")
     st.divider()
 
-# --- TREŚĆ ZAKŁADEK ---
+# --- ŚRODEK: TREŚĆ ZAKŁADEK ---
 if st.session_state.tab == "Start":
-    st.markdown("### 🏗️ W realizacji")
+    st.markdown("#### 🏗️ W realizacji")
     active = df[df['Status'] == "W realizacji"] if 'Status' in df.columns else pd.DataFrame()
     if not active.empty:
         for idx, row in active.iterrows():
-            st.info(f"**{row.iloc[0]}**\n\n📍 {row.iloc[3]}")
-            if st.button("Szczegóły", key=f"btn_{idx}", use_container_width=True):
-                st.session_state.selected_client = row
-                st.switch_page("pages/details.py")
+            with st.container(border=True):
+                st.markdown(f"**{row.iloc[0]}**\n\n📍 {row.iloc[3]}")
+                if st.button("Szczegóły", key=f"btn_{idx}", use_container_width=True):
+                    st.session_state.selected_client = row
+                    st.switch_page("pages/details.py")
     else:
-        st.write("Brak aktywnych budów o statusie 'W realizacji'.")
+        st.info("Brak aktywnych budów.")
 
 elif st.session_state.tab == "Aktualności":
-    st.markdown("### ⚡ Aktualności")
-    # Wyświetlamy 10 najnowszych
-    df_recent = df.iloc[::-1].head(10)
-    for i, row in df_recent.iterrows():
-        with st.expander(f"📌 {row.iloc[0]} - {row.iloc[3]}"):
-            st.write(f"📞 {row.iloc[6]}")
-            st.info(f"💡 {row.iloc[9]}")
+    st.markdown("#### ⚡ Aktualności")
+    for i, row in df.iloc[::-1].head(10).iterrows():
+        st.info(f"**{row.iloc[0]}**\n{row.iloc[9]}")
 
-# --- DODAWANIE PRZYCISKÓW DO MENU (Trik z HTML) ---
-# Ponieważ przyciski Streamlit wewnątrz HTML nie działają bezpośrednio,
-# używamy natywnych kolumn, ale wymuszamy ich szerokość CSSem, by nie przeskakiwały do pionu.
-st.markdown('<div style="height: 100px;"></div>', unsafe_allow_html=True) # Dystans
+# --- DÓŁ: MOJE MENU (FIXED) ---
+# Używamy st.columns, ale musimy je zmusić do zostania w poziomie przez CSS wbudowany
+m_cols = st.columns(5)
+labels = ["Start", "Akt", "Kli", "Tel", "Zad"]
+icons = ["🏠", "⚡", "👥", "📞", "✅"]
+tabs = ["Start", "Aktualności", "Klienci", "Telefony", "Zadania"]
 
-# Ten kontener będzie "pływał" na dole
-menu_container = st.container()
-with menu_container:
-    # Wymuszamy 5 kolumn obok siebie nawet na telefonie
-    m1, m2, m3, m4, m5 = st.columns(5)
-    with m1:
-        if st.button("🏠\nStart"): st.session_state.tab = "Start"; st.rerun()
-    with m2:
-        if st.button("⚡\nAkt"): st.session_state.tab = "Aktualności"; st.rerun()
-    with m3:
-        if st.button("👥\nKli"): st.session_state.tab = "Klienci"; st.rerun()
-    with m4:
-        if st.button("📞\nTel"): st.session_state.tab = "Telefony"; st.rerun()
-    with m5:
-        if st.button("✅\nZad"): st.session_state.tab = "Zadania"; st.rerun()
+for i, col in enumerate(m_cols):
+    with col:
+        # Przycisk z ikoną i krótkim podpisem
+        if st.button(f"{icons[i]}\n{labels[i]}", key=f"nav_{i}", use_container_width=True):
+            st.session_state.tab = tabs[i]
+            st.rerun()
 
-# CSS wymuszający układ poziomy dla kolumn menu
-st.markdown("""
+# CSS wymuszający układ 5 kolumn obok siebie na dole
+st.markdown(f"""
     <style>
-    [data-testid="column"] {
-        width: 20% !important;
-        flex: 1 1 20% !important;
-        min-width: 20% !important;
-    }
-    [data-testid="stVerticalBlock"] > div:last-child {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background: #111;
-        padding: 10px;
-        z-index: 10000;
-        border-top: 2px solid orange;
-    }
+    [data-testid="stHorizontalBlock"] {{
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        background: #0e1117 !important;
+        padding: 10px !important;
+        z-index: 100000 !important;
+        border-top: 2px solid #ffaa00 !important;
+        display: flex !important;
+        flex-direction: row !important;
+    }}
+    [data-testid="column"] {{
+        min-width: 0px !important;
+        flex: 1 !important;
+    }}
+    button p {{ font-size: 10px !important; }}
     </style>
     """, unsafe_allow_html=True)
