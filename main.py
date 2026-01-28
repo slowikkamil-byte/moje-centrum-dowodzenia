@@ -36,46 +36,60 @@ try:
         }
     )
 
-    if selected == "Start":
+  if selected == "Start":
         st.header("🏗️ W realizacji")
         
         # Filtrowanie po statusie "W realizacji"
-        df_active = df[df['Status'] == "W realizacji"]
-        
+        if 'Status' in df.columns:
+            df_active = df[df['Status'] == "W realizacji"]
+        else:
+            df_active = pd.DataFrame() # Pusta tabela jeśli nie ma jeszcze kolumny Status
+
         # Logika wyszukiwania
-        if search_query:
+        if search_query and not df_active.empty:
             df_active = df_active[df_active.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)]
 
         # Wyświetlanie kafelków
-        cols = st.columns(2) # 2 kafelki w rzędzie na telefonie
-        for index, row in df_active.iterrows():
-            # Kolorystyka w zależności od Typu Pracy
-            typ = str(row['Typ pracy']).lower()
-            color = "#31333F" # Standard
-            if "malowanie" in typ: color = "#FF4B4B"
-            elif "elewacja" in typ: color = "#00CC96"
-            elif "przekrywka" in typ: color = "#636EFA"
+        if not df_active.empty:
+            cols = st.columns(2)
+            for index, row in df_active.iterrows():
+                typ = str(row.get('Typ pracy', '')).lower()
+                color = "#31333F"
+                if "malowanie" in typ: color = "#FF4B4B"
+                elif "elewacja" in typ: color = "#00CC96"
+                elif "przekrywka" in typ: color = "#636EFA"
 
-            with cols[index % 2]:
-                st.markdown(f"""
-                <div style="background-color:{color}; padding:20px; border-radius:15px; margin-bottom:10px; cursor:pointer;">
-                    <h3 style="margin:0;">{row.iloc[0]}</h3>
-                    <p style="margin:5px 0;">📍 {row.iloc[3]}</p>
-                    <p style="margin:0;">📞 {row.iloc[6]}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button(f"Szczegóły: {row.iloc[0]}", key=index):
-                    st.session_state['selected_client'] = row
-                    st.switch_page("pages/details.py") # Przejście do szczegółów
+                with cols[index % 2]:
+                    st.markdown(f"""
+                    <div style="background-color:{color}; padding:20px; border-radius:15px; margin-bottom:10px;">
+                        <h3 style="margin:0; color:white;">{row.iloc[0]}</h3>
+                        <p style="margin:5px 0; color:white;">📍 {row.iloc[3]}</p>
+                        <p style="margin:0; color:white;">📞 {row.iloc[6]}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button(f"Szczegóły: {row.iloc[0]}", key=f"btn_{index}"):
+                        st.session_state['selected_client'] = row
+                        st.switch_page("pages/details.py")
+        else:
+            st.info("Brak zleceń o statusie 'W realizacji'.")
 
-  elif selected == "Aktualności":
+    elif selected == "Aktualności":
         st.header("⚡ Ostatnie rozmowy")
-        # Wyświetlamy 5 najnowszych wpisów (od dołu arkusza)
         if not df.empty:
-            for i in range(len(df)-1, max(-1, len(df)-6), -1):
-                row = df.iloc[i]
+            # Odwracamy kolejność, żeby najnowsze były na górze
+            df_recent = df.iloc[::-1].head(10)
+            for index, row in df_recent.iterrows():
                 with st.expander(f"📌 {row.iloc[0]} - {row.iloc[3]}"):
                     st.write(f"📞 {row.iloc[6]}")
                     st.info(f"💡 Esencja: {row.iloc[9]}")
-        else:
-            st.info("Brak danych w arkuszu.")
+                    if st.button(f"Otwórz kartę: {row.iloc[0]}", key=f"news_{index}"):
+                        st.session_state['selected_client'] = row
+                        st.switch_page("pages/details.py")
+
+    elif selected == "Klienci":
+        st.header("👥 Pełna baza")
+        st.dataframe(df.iloc[::-1], use_container_width=True)
+
+except Exception as e:
+    st.error(f"Czekam na połączenie z bazą... Błąd: {e}")
+    st.info("Upewnij się, że udostępniłeś arkusz Google (Każdy z linkiem może przeglądać).")
