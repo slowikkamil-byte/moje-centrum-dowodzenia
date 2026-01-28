@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 # Konfiguracja strony
 st.set_page_config(page_title="CRM Dekarski", layout="wide", initial_sidebar_state="expanded")
 
-# CSS: Cienka zielona ramka (2px), czyste karty i styl przycisków
+# CSS: Cienka zielona ramka (2px), czyste karty i pełna szerokość przycisków mobilnych
 st.markdown("""
     <style>
     .client-card {
@@ -16,22 +16,31 @@ st.markdown("""
         margin-bottom: 20px;
         background-color: #1d2129;
     }
+    /* Styl dla wszystkich przycisków */
     .stButton button {
         background-color: transparent;
         border: 1px solid #00e676;
         color: #00e676;
-        width: 100%;
+        width: 100%; /* Pełna szerokość na mobilkach */
         border-radius: 8px;
         transition: 0.3s;
+        height: 3em;
+        margin-bottom: 10px;
     }
     .stButton button:hover {
         background-color: #00e676;
         color: #1d2129;
     }
-    /* Styl dla przycisków akcji pod wyszukiwarką */
-    .action-button button {
-        border: 1px solid #e0e0e0 !important;
-        color: #e0e0e0 !important;
+    /* Usunięcie zbędnych marginesów w kolumnach na mobilkach */
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: 1 1 calc(33.333% - 1rem) !important;
+        min-width: 100% !important;
+    }
+    @media (min-width: 768px) {
+        [data-testid="column"] {
+            min-width: 0 !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -61,21 +70,23 @@ if not df.empty:
     # 1. WYSZUKIWARKA
     search = st.text_input("🔍 Szukaj klienta...", placeholder="Wpisz nazwisko lub adres...").lower()
     
-    # 2. TRZY PRZYCISKI AKCJI (Filtry / Szybkie akcje)
-    col_a, col_b, col_c = st.columns(3)
-    with col_a:
-        if st.button("🆕 Nowe zlecenia", key="filter_new"):
-            search = "nowy" # Przykładowe działanie - filtracja
-    with col_b:
-        if st.button("📅 Dzisiejsze spotkania", key="filter_today"):
-            # Tutaj można dodać logikę filtrowania po dacie
-            st.info("Funkcja filtrowania daty w przygotowaniu")
-    with col_c:
-        if st.button("✅ Zakończone", key="filter_done"):
-            search = "zakończone"
+    # 2. TWOJE ORYGINALNE 3 PRZYCISKI (Pełna szerokość na mobilnych)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📞 Do zadzwonienia", use_container_width=True):
+            search = "do zadzwonienia"
+    with col2:
+        if st.button("📝 Do wyceny", use_container_width=True):
+            search = "do wyceny"
+    with col3:
+        if st.button("📅 Umówione", use_container_width=True):
+            search = "umówione"
 
     if search:
-        df = df[df.apply(lambda row: search in str(row.iloc[0]).lower() or search in str(row.iloc[3]).lower() or search in str(row.iloc[10]).lower(), axis=1)]
+        # Filtrowanie po Nazwisku (0), Esencji (3) lub Statusie (10)
+        df = df[df.apply(lambda row: search in str(row.iloc[0]).lower() or 
+                                     search in str(row.iloc[3]).lower() or 
+                                     search in str(row.iloc[10]).lower(), axis=1)]
 
     st.write("") 
 
@@ -95,13 +106,12 @@ if not df.empty:
             </div>
             """, unsafe_allow_html=True)
         
-        if st.button(f"Otwórz kartę: {nazwisko}", key=f"btn_{index}"):
+        if st.button(f"Szczegóły: {nazwisko}", key=f"btn_{index}", use_container_width=True):
             st.session_state['selected_client'] = row
             st.switch_page("pages/details.py")
 else:
     st.info("Pobieranie danych z bazy...")
 
-# Sidebar
-st.sidebar.markdown("### Ustawienia")
-if st.sidebar.button("🔄 Odśwież Bazę"):
+st.sidebar.markdown("### Nawigacja")
+if st.sidebar.button("🔄 Odśwież listę"):
     st.rerun()
