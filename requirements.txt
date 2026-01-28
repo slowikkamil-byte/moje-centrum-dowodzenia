@@ -2,3 +2,6 @@ streamlit
 pandas
 streamlit-autorefresh
 streamlit-option-menu
+google-api-python-client
+google-auth
+google-auth-httplib2
